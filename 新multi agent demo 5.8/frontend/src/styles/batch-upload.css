@@ -1,0 +1,15 @@
+/* 大批量后台导入触发按钮 — 可被 Tailwind 类名叠加使用 */
+
+.batch-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.batch-upload-btn--rules {
+  border-color: rgb(59 130 246 / 0.55);
+}
+
+.batch-upload-btn--knowledge {
+  border-color: rgb(139 92 246 / 0.55);
+}

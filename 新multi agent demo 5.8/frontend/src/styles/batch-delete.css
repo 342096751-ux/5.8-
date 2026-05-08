@@ -1,0 +1,10 @@
+.batch-delete-toolbar {
+  border: 1px solid rgb(254 202 202);
+  background: rgb(254 242 242);
+}
+
+.batch-delete-danger {
+  background: rgb(220 38 38);
+  color: #fff;
+}
+

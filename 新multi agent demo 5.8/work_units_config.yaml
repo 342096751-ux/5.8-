@@ -1,0 +1,14 @@
+# 工作单元注册表。可由 Streamlit 或 audit_system.agent_manager 维护；「enabled」为 false 时不参与运行与意图可选项。
+units:
+  - name: 政治审核员
+    domain: politics
+    prompt_file: prompts/work_unit_politics.txt
+    enabled: true
+  - name: 色情审核员
+    domain: sexual
+    prompt_file: prompts/work_unit_sexual.txt
+    enabled: true
+  - name: 暴力审核员
+    domain: violence
+    prompt_file: prompts/work_unit_violence.txt
+    enabled: true

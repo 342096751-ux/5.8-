@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>多Agent内容审核系统 Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fb;
+        --card: #ffffff;
+        --text: #1f2937;
+        --muted: #6b7280;
+        --primary: #2563eb;
+        --danger: #dc2626;
+        --ok: #059669;
+        --warn: #d97706;
+        --border: #e5e7eb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .container {
+        max-width: 980px;
+        margin: 32px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+        box-shadow: 0 4px 18px rgba(17, 24, 39, 0.04);
+        margin-bottom: 14px;
+      }
+      h1 { margin: 0 0 8px; font-size: 24px; }
+      .sub { color: var(--muted); margin: 0 0 16px; }
+      textarea {
+        width: 100%;
+        min-height: 120px;
+        resize: vertical;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 15px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+        align-items: center;
+      }
+      button {
+        border: 0;
+        background: var(--primary);
+        color: #fff;
+        border-radius: 10px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .tag {
+        display: inline-block;
+        border-radius: 999px;
+        font-size: 12px;
+        padding: 2px 10px;
+        border: 1px solid transparent;
+      }
+      .tag.ok { color: var(--ok); background: #ecfdf5; border-color: #a7f3d0; }
+      .tag.warn { color: var(--warn); background: #fffbeb; border-color: #fde68a; }
+      .tag.danger { color: var(--danger); background: #fef2f2; border-color: #fecaca; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .muted { color: var(--muted); font-size: 13px; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      ul { margin: 8px 0; padding-left: 18px; }
+      .hidden { display: none; }
+      pre {
+        margin: 0;
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 10px;
+        padding: 10px;
+        overflow: auto;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>多 Agent 内容审核系统</h1>
+        <p class="sub">前端演示页（当前为模拟审核结果，可后续接入 Python API）</p>
+        <label for="content">待审核内容</label>
+        <textarea id="content">这种人就应该被挂路灯，资本家没一个好东西。</textarea>
+        <div class="row">
+          <button id="auditBtn">开始审核</button>
+          <span id="status" class="muted">状态：等待输入</span>
+        </div>
+      </div>
+
+      <div id="resultCard" class="card hidden">
+        <div class="row" style="justify-content: space-between">
+          <strong>审核结果</strong>
+          <span id="finalTag" class="tag warn">存疑</span>
+        </div>
+        <div class="grid" style="margin-top: 10px">
+          <div><div class="muted">执行动作</div><div id="actionText">放行但记录</div></div>
+          <div><div class="muted">判定依据</div><div id="basisText">证据强度</div></div>
+          <div><div class="muted">策略</div><div class="mono">安全优先</div></div>
+        </div>
+        <hr style="border: none; border-top: 1px solid var(--border); margin: 14px 0" />
+        <div class="muted">简要理由</div>
+        <div id="reasonText">检测到煽动性表达，语境存在泛化攻击倾向。</div>
+        <div style="margin-top: 12px" class="muted">激活工作单元</div>
+        <ul id="unitsList">
+          <li>政治审核员</li>
+        </ul>
+      </div>
+
+      <div id="reasonCard" class="card hidden">
+        <strong>推理过程</strong>
+        <ul id="reasoningList"></ul>
+      </div>
+
+      <div id="llmCard" class="card hidden">
+        <strong>模型调用日志</strong>
+        <p class="muted">展示模型名、system/user prompt 和返回 JSON（当前为前端模拟）</p>
+        <pre id="llmLog"></pre>
+      </div>
+    </div>
+
+    <script>
+      const auditBtn = document.getElementById("auditBtn");
+      const contentEl = document.getElementById("content");
+      const statusEl = document.getElementById("status");
+      const resultCard = document.getElementById("resultCard");
+      const finalTag = document.getElementById("finalTag");
+      const actionText = document.getElementById("actionText");
+      const basisText = document.getElementById("basisText");
+      const reasonText = document.getElementById("reasonText");
+      const unitsList = document.getElementById("unitsList");
+      const reasonCard = document.getElementById("reasonCard");
+      const llmCard = document.getElementById("llmCard");
+      const reasoningList = document.getElementById("reasoningList");
+      const llmLog = document.getElementById("llmLog");
+
+      function classify(text) {
+        const t = text || "";
+        if (t.includes("挂路灯") || t.includes("杀") || t.includes("打死")) {
+          return {
+            final: "违规",
+            action: "拦截",
+            basis: "证据强度",
+            reason: "存在明显暴力煽动或人身伤害倾向表达。",
+            units: ["政治审核员"],
+            level: "danger",
+            reasoning: [
+              "意图分析：识别到激烈攻击倾向，关键词命中暴力表达。",
+              "政治工作单元：证据与风险条款匹配，结论偏向违规。",
+              "验证器：证据充分，无需继续补全。",
+            ],
+            llmCalls: [
+              {
+                model: "gpt-4o-mini",
+                system_msg: "你是一个严格的JSON生成器，只返回要求的JSON。",
+                user_prompt: "intent_analyst prompt ...",
+                parsed_response: {
+                  意图标签: ["攻击性表达", "群体对立"],
+                  建议激活单元: ["政治审核员"],
+                },
+              },
+              {
+                model: "gpt-4o-mini",
+                system_msg: "你是一个严格的JSON生成器，只返回要求的JSON。",
+                user_prompt: "work_unit_politics prompt ...",
+                parsed_response: { 结论: "违规", 置信度: "高" },
+              },
+            ],
+          };
+        }
+        if (t.includes("资本家") || t.includes("体制")) {
+          return {
+            final: "存疑",
+            action: "放行但记录",
+            basis: "交叉验证",
+            reason: "包含群体对立或政治倾向表达，建议复核。",
+            units: ["政治审核员"],
+            level: "warn",
+            reasoning: [
+              "意图分析：触发政治倾向词和对立叙述。",
+              "政治工作单元：存在风险但语境可解释，结论存疑。",
+              "验证器：建议补充证据，最终放行但记录。",
+            ],
+            llmCalls: [
+              {
+                model: "gpt-4o-mini",
+                system_msg: "你是一个严格的JSON生成器，只返回要求的JSON。",
+                user_prompt: "intent_analyst prompt ...",
+                parsed_response: { 建议激活单元: ["政治审核员"] },
+              },
+              {
+                model: "gpt-4o-mini",
+                system_msg: "你是一个严格的JSON生成器，只返回要求的JSON。",
+                user_prompt: "verifier prompt ...",
+                parsed_response: { 质疑列表: [{ 质疑类型: "证据不足" }] },
+              },
+            ],
+          };
+        }
+        return {
+          final: "安全",
+          action: "放行",
+          basis: "证据不足",
+          reason: "未检测到明显违规信号。",
+          units: ["无需激活"],
+          level: "ok",
+          reasoning: [
+            "意图分析：未发现高风险意图。",
+            "未激活工作单元，系统直接判定安全。",
+          ],
+          llmCalls: [
+            {
+              model: "gpt-4o-mini",
+              system_msg: "你是一个严格的JSON生成器，只返回要求的JSON。",
+              user_prompt: "intent_analyst prompt ...",
+              parsed_response: { 建议激活单元: [] },
+            },
+          ],
+        };
+      }
+
+      auditBtn.addEventListener("click", () => {
+        const text = contentEl.value.trim();
+        if (!text) {
+          statusEl.textContent = "状态：请输入内容";
+          return;
+        }
+        auditBtn.disabled = true;
+        statusEl.textContent = "状态：审核中...";
+
+        setTimeout(() => {
+          const result = classify(text);
+          finalTag.textContent = result.final;
+          finalTag.className = `tag ${result.level}`;
+          actionText.textContent = result.action;
+          basisText.textContent = result.basis;
+          reasonText.textContent = result.reason;
+          unitsList.innerHTML = result.units.map((u) => `<li>${u}</li>`).join("");
+          reasoningList.innerHTML = result.reasoning.map((r) => `<li>${r}</li>`).join("");
+          llmLog.textContent = JSON.stringify(result.llmCalls, null, 2);
+
+          resultCard.classList.remove("hidden");
+          reasonCard.classList.remove("hidden");
+          llmCard.classList.remove("hidden");
+          statusEl.textContent = "状态：审核完成（前端模拟）";
+          auditBtn.disabled = false;
+        }, 650);
+      });
+    </script>
+  </body>
+</html>
